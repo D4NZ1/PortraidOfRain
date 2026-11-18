@@ -74,3 +74,9 @@ Thumbs.db
 
 # Runtime-generated per-install identity (written by the runner when profile dir = repo root)
 runner/freebios/
+
+# FreeBIOS banks (BSD-2-Clause, no Nintendo dump) needed by the Android CI build
+!generated/arm9_bios*
+!generated/arm7_bios*
+!generated/freebios_arm9*
+!generated/freebios_arm7*
