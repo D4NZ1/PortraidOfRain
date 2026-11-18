@@ -41,7 +41,7 @@ public class TitleActivity extends Activity {
     private static final int REQUEST_CODE_PICK_ROM = 1001;
     private static final int REQUEST_CODE_STORAGE_PERMISSION = 1002;
     private static final String ROM_FILENAME = "Castlevania Portrait of Ruin.nds";
-    public static final String EXPECTED_ROM_SHA1 = "c1fb223c706be6efd66827675eff2360a1605cdc";
+    public static final String EXPECTED_ROM_SHA1 = "26fe05fa12019facea91556e4e6b00ba6989e15d";
 
     private boolean mStartingGame = false;
     private boolean mCheckingRom = true;
