@@ -691,6 +691,7 @@ struct AudioQueue {
     uint32_t read = 0;
     uint32_t write = 0;
     uint32_t count = 0;
+    double stretch_phase = 0.0;
 #endif
     std::atomic<uint64_t> underruns{0};
     std::atomic<bool> started{false};
@@ -736,16 +737,49 @@ void SDLCALL audio_callback(void* userdata, Uint8* stream, int len) {
     std::memset(stream, 0, static_cast<size_t>(len));
     if (!queue || len <= 0) return;
     const uint32_t requested = static_cast<uint32_t>(len) / kAudioFrameBytes;
-    const uint32_t take = std::min(requested, queue->count);
     auto* output = reinterpret_cast<int16_t*>(stream);
-    const uint32_t first = std::min(take, kAudioCapacityFrames - queue->read);
-    std::memcpy(output, queue->samples.data() + queue->read * 2u,
-                first * kAudioFrameBytes);
-    if (first < take)
-        std::memcpy(output + first * 2u, queue->samples.data(),
-                    (take - first) * kAudioFrameBytes);
-    queue->read = (queue->read + take) % kAudioCapacityFrames;
-    queue->count -= take;
+    // Adaptive playback rate: when the host emulates slower than real time
+    // the queue runs dry and the hard gaps crackle. Below kStretchLow queued
+    // frames, play slightly slower (linear interpolation) so the sound stays
+    // continuous. At rate 1.0 the output is bit-identical to a plain copy.
+    // NDS_AUDIO_STRETCH=0 disables it.
+    constexpr uint32_t kStretchLow = 1536;
+    static const bool stretch_enabled = [] {
+        const char* v = std::getenv("NDS_AUDIO_STRETCH");
+        return !(v && v[0] == '0' && v[1] == '\0');
+    }();
+    double rate = 1.0;
+    if (stretch_enabled && queue->count < kStretchLow) {
+        rate = std::max(0.5, static_cast<double>(queue->count) /
+                                 static_cast<double>(kStretchLow));
+    }
+    if (rate >= 1.0) queue->stretch_phase = 0.0;
+    uint32_t produced = 0;
+    for (; produced < requested; ++produced) {
+        const bool frac = queue->stretch_phase > 0.0;
+        if (queue->count < (frac ? 2u : 1u)) break;
+        const uint32_t i0 = queue->read;
+        const int16_t* s0 = queue->samples.data() + i0 * 2u;
+        if (frac) {
+            const uint32_t i1 = (i0 + 1u) % kAudioCapacityFrames;
+            const int16_t* s1 = queue->samples.data() + i1 * 2u;
+            const double f = queue->stretch_phase;
+            output[produced * 2u] = static_cast<int16_t>(
+                s0[0] + (s1[0] - s0[0]) * f);
+            output[produced * 2u + 1u] = static_cast<int16_t>(
+                s0[1] + (s1[1] - s0[1]) * f);
+        } else {
+            output[produced * 2u] = s0[0];
+            output[produced * 2u + 1u] = s0[1];
+        }
+        queue->stretch_phase += rate;
+        uint32_t adv = static_cast<uint32_t>(queue->stretch_phase);
+        queue->stretch_phase -= static_cast<double>(adv);
+        if (adv > queue->count) adv = queue->count;
+        queue->read = (queue->read + adv) % kAudioCapacityFrames;
+        queue->count -= adv;
+    }
+    const uint32_t take = produced;
     if (take < requested && queue->started.load(std::memory_order_relaxed))
         queue->underruns.fetch_add(1, std::memory_order_relaxed);
 }
