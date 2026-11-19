@@ -77,6 +77,7 @@ public class MainActivity extends SDLActivity {
             Os.setenv("NDS_CYCLE_FAST_LIMIT", "1", true);
             Os.setenv("NDS_CPU_FAST_POLL", "1", true);
             Os.setenv("NDS_3D_RENDERER", "soft", true);
+            Os.setenv("NDS_FPS_FILE", new File(getFilesDir(), "fps.txt").getAbsolutePath(), true);
         } catch (Exception e) {
             Log.w(TAG, "Failed to set env vars", e);
         }
@@ -112,6 +113,35 @@ public class MainActivity extends SDLActivity {
                 RelativeLayout.LayoutParams.MATCH_PARENT
             );
             mLayout.addView(overlay, lp);
+        }
+
+        if (mLayout != null) {
+            final android.widget.TextView fpsView = new android.widget.TextView(this);
+            fpsView.setTextColor(android.graphics.Color.GREEN);
+            fpsView.setTextSize(14);
+            fpsView.setShadowLayer(3f, 1f, 1f, android.graphics.Color.BLACK);
+            fpsView.setPadding(16, 8, 16, 8);
+            fpsView.setText("-- FPS");
+            RelativeLayout.LayoutParams flp = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            );
+            flp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+            flp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+            mLayout.addView(fpsView, flp);
+            final File fpsFile = new File(getFilesDir(), "fps.txt");
+            final android.os.Handler fpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            fpsHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(fpsFile))) {
+                        String line = r.readLine();
+                        if (line != null) fpsView.setText(line.trim() + " FPS");
+                    } catch (Exception ignored) {
+                    }
+                    fpsHandler.postDelayed(this, 500);
+                }
+            });
         }
 
         final VirtualControlsOverlay fOverlay = overlay;

@@ -4263,6 +4263,12 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
             const double seconds = static_cast<double>(counter - fps_start) /
                                    static_cast<double>(frequency);
             const double fps = static_cast<double>(fps_frames) / seconds;
+            if (const char* fps_path = std::getenv("NDS_FPS_FILE")) {
+                if (FILE* fps_file = std::fopen(fps_path, "w")) {
+                    std::fprintf(fps_file, "%.1f", fps);
+                    std::fclose(fps_file);
+                }
+            }
             const std::string fps_text =
                 std::to_string(fps).substr(0, 4) + " FPS";
             const std::string governor_text =
