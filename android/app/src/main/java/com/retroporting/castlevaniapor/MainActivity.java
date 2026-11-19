@@ -71,8 +71,8 @@ public class MainActivity extends SDLActivity {
 
         try {
             Os.setenv("NDS_SCREEN_LAYOUT", "single", true);
-            Os.setenv("NDS_GPU2D_THREADED", "0", true);
-            Os.setenv("NDS_GPU2D_WORKERS", "1", true);
+            Os.setenv("NDS_GPU2D_THREADED", "1", true);
+            Os.setenv("NDS_GPU2D_WORKERS", "2", true);
             Os.setenv("NDS_PERFORMANCE_GOVERNOR", "auto", true);
             Os.setenv("NDS_CYCLE_FAST_LIMIT", "1", true);
             Os.setenv("NDS_CPU_FAST_POLL", "1", true);
