@@ -43,3 +43,13 @@ Build the Android Release APK with GitHub Actions, then compare the same ROM,
 room, camera position, and test duration against the previous build. Record
 FPS, `emu` ms, `pres` ms, and audio behavior. LTO is an experiment, not a
 guaranteed FPS increase; retain the baseline APK for A/B comparison.
+
+
+## Audio stretch default
+
+The adaptive audio stretch path in `frontend.cpp` is now opt-in. With no
+`NDS_AUDIO_STRETCH` environment variable, audio is consumed at the normal
+1.0 playback rate; set `NDS_AUDIO_STRETCH=1` before process startup to enable
+the adaptive interpolation path. This isolates whether the stretch behavior
+was causing the reported slow/distorted sound. It does not fix audio queue
+underruns; if crackling remains, measure queue underruns separately.

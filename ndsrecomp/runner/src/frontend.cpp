@@ -738,15 +738,14 @@ void SDLCALL audio_callback(void* userdata, Uint8* stream, int len) {
     if (!queue || len <= 0) return;
     const uint32_t requested = static_cast<uint32_t>(len) / kAudioFrameBytes;
     auto* output = reinterpret_cast<int16_t*>(stream);
-    // Adaptive playback rate: when the host emulates slower than real time
-    // the queue runs dry and the hard gaps crackle. Below kStretchLow queued
-    // frames, play slightly slower (linear interpolation) so the sound stays
-    // continuous. At rate 1.0 the output is bit-identical to a plain copy.
-    // NDS_AUDIO_STRETCH=0 disables it.
+    // Adaptive playback-rate stretching is opt-in. It can mask queue
+    // underruns, but changes playback speed/pitch behavior and can make audio
+    // sound slow or distorted on some devices. Normal playback is the default.
+    // Set NDS_AUDIO_STRETCH=1 before starting the process to re-enable it.
     constexpr uint32_t kStretchLow = 1536;
     static const bool stretch_enabled = [] {
         const char* v = std::getenv("NDS_AUDIO_STRETCH");
-        return !(v && v[0] == '0' && v[1] == '\0');
+        return v && v[0] == '1' && v[1] == '\0';
     }();
     double rate = 1.0;
     if (stretch_enabled && queue->count < kStretchLow) {
