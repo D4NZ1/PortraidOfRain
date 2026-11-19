@@ -1,6 +1,9 @@
 #include "frontend.h"
 #include "host_profile.h"
 
+#if defined(__ANDROID__)
+#include <sched.h>
+#endif
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -764,6 +767,40 @@ bool sdl_init_frontend() {
                     SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) == 0;
 #endif
 }
+
+#if defined(__ANDROID__)
+// Big.LITTLE: keep the emulation thread off the slow cores. Picks every CPU
+// whose cpuinfo_max_freq equals the maximum and pins only the calling thread.
+void pin_emu_thread_to_big_cores() {
+    long freq[16] = {};
+    long best = 0;
+    int ncpu = 0;
+    for (int i = 0; i < 16; ++i) {
+        char path[96];
+        std::snprintf(path, sizeof(path),
+                      "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        FILE* f = std::fopen(path, "r");
+        if (!f) break;
+        long v = 0;
+        if (std::fscanf(f, "%ld", &v) != 1) v = 0;
+        std::fclose(f);
+        freq[i] = v;
+        if (v > best) best = v;
+        ncpu = i + 1;
+    }
+    if (ncpu < 2 || best <= 0) return;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    int big = 0;
+    for (int i = 0; i < ncpu; ++i) {
+        if (freq[i] == best) { CPU_SET(i, &set); ++big; }
+    }
+    if (big == 0 || big == ncpu) return;
+    const int rc = sched_setaffinity(0, sizeof(set), &set);
+    std::fprintf(stderr, "[cpu] emu thread pinned to %d big cores (rc=%d)\n",
+                 big, rc);
+}
+#endif
 
 bool sdl_set_thread_priority_high() {
 #if defined(NDS_HAVE_SDL3)
@@ -2882,6 +2919,9 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
     uint64_t shown_frames = 0;
     uint64_t synthetic_presents = 0;
     FrameBlendCache blend_cache{};
+#if defined(__ANDROID__)
+    pin_emu_thread_to_big_cores();
+#endif
     uint64_t fps_frames = 0;
     uint64_t fps_start = SDL_GetPerformanceCounter();
     const uint64_t frequency = SDL_GetPerformanceFrequency();
