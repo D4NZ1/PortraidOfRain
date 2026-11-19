@@ -41,6 +41,17 @@ option(NDS_PROFILE_MEM_TIMING
 set(NDS_PGO_MODE "OFF" CACHE STRING
     "Runner-only GCC PGO mode: OFF, GENERATE, or USE")
 set_property(CACHE NDS_PGO_MODE PROPERTY STRINGS OFF GENERATE USE)
+
+# Android ARM64 release experiment: limit LTO to the emulation hot path.
+if(ANDROID)
+    option(NDS_ANDROID_ENABLE_LTO
+        "Enable LTO for Android runner, support code and generated ARM banks"
+        ON)
+else()
+    option(NDS_ANDROID_ENABLE_LTO
+        "Enable LTO for Android runner, support code and generated ARM banks"
+        OFF)
+endif()
 option(NDS_PGO_PARTIAL_TRAINING
     "Keep functions the training route never executed on normal optimization \
 instead of letting -fprofile-use size-optimize them as cold"
@@ -222,8 +233,14 @@ if(SM64DS_BANK_SOURCES AND NOT MSVC)
         PROPERTIES COMPILE_OPTIONS "-w;-O2;-g0")
 endif()
 if(TITLE_BANK_SOURCES AND NOT MSVC)
-    set_source_files_properties(${TITLE_BANK_SOURCES}
-        PROPERTIES COMPILE_OPTIONS "-w;-O2;-g0")
+    if(ANDROID)
+        # Title banks dominate guest CPU execution; test O3 with Android LTO.
+        set_source_files_properties(${TITLE_BANK_SOURCES}
+            PROPERTIES COMPILE_OPTIONS "-w;-O3;-g0")
+    else()
+        set_source_files_properties(${TITLE_BANK_SOURCES}
+            PROPERTIES COMPILE_OPTIONS "-w;-O2;-g0")
+    endif()
 endif()
 
 # Every immutable bank is CPU-specific even though both use one runtime ABI.
@@ -759,6 +776,27 @@ endif()
 # main thread size is fixed at link time, so ask for it here.
 if(APPLE)
     target_link_options(nds_runner PRIVATE -Wl,-stack_size,0x4000000)
+endif()
+
+
+# Apply IPO/LTO only to code participating in the emulation hot path. SDL2
+# and unrelated third-party libraries are intentionally left unchanged.
+if(ANDROID AND NDS_ANDROID_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _nds_ipo_supported OUTPUT _nds_ipo_error
+        LANGUAGES C CXX)
+    if(_nds_ipo_supported)
+        foreach(_nds_hot_target nds_banks nds_support nds_armv4t nds_runner)
+            if(TARGET ${_nds_hot_target})
+                set_property(TARGET ${_nds_hot_target}
+                    PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+            endif()
+        endforeach()
+        message(STATUS "ndsrecomp: Android LTO enabled for emulation hot path")
+    else()
+        message(WARNING
+            "ndsrecomp: Android LTO unavailable; continuing without it: ${_nds_ipo_error}")
+    endif()
 endif()
 
 if(NOT ANDROID)
