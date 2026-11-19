@@ -30,6 +30,7 @@
 #include "relative_mouse_touch.h"
 #include "runtime_arm.h"
 #include "scheduler.h"
+#include "tier3.h"
 #include "savestate_slots.h"
 #include "spu.h"
 #include "title_patches.h"
@@ -2923,6 +2924,7 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
     pin_emu_thread_to_big_cores();
 #endif
     uint64_t fps_frames = 0;
+    uint64_t fps_prev_emu = 0, fps_prev_present = 0, fps_prev_t3 = 0;
     uint64_t fps_start = SDL_GetPerformanceCounter();
     const uint64_t frequency = SDL_GetPerformanceFrequency();
     const uint64_t soak_frames = environment_u64("NDS_FRONTEND_MAX_FRAMES");
@@ -4305,8 +4307,23 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
             const double fps = static_cast<double>(fps_frames) / seconds;
             if (const char* fps_path = std::getenv("NDS_FPS_FILE")) {
                 if (FILE* fps_file = std::fopen(fps_path, "w")) {
-                    std::fprintf(fps_file, "%.1f", fps);
+                    const Tier3Stats t3 = tier3_stats();
+                    const uint64_t t3_now = t3.instructions[0] + t3.instructions[1];
+                    const double nf = fps_frames ? static_cast<double>(fps_frames) : 1.0;
+                    const double emu_ms =
+                        static_cast<double>(phase_emu_ticks - fps_prev_emu) * 1000.0 /
+                        static_cast<double>(frequency) / nf;
+                    const double pres_ms =
+                        static_cast<double>(phase_present_ticks - fps_prev_present) * 1000.0 /
+                        static_cast<double>(frequency) / nf;
+                    std::fprintf(fps_file, "%.1f FPS|emu %.1f ms|pres %.1f ms|t3 %llu/s",
+                                 fps, emu_ms, pres_ms,
+                                 static_cast<unsigned long long>(
+                                     static_cast<double>(t3_now - fps_prev_t3) / seconds));
                     std::fclose(fps_file);
+                    fps_prev_emu = phase_emu_ticks;
+                    fps_prev_present = phase_present_ticks;
+                    fps_prev_t3 = t3_now;
                 }
             }
             const std::string fps_text =

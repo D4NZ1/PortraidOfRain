@@ -118,7 +118,7 @@ public class MainActivity extends SDLActivity {
         if (mLayout != null) {
             final android.widget.TextView fpsView = new android.widget.TextView(this);
             fpsView.setTextColor(android.graphics.Color.GREEN);
-            fpsView.setTextSize(14);
+            fpsView.setTextSize(12);
             fpsView.setShadowLayer(3f, 1f, 1f, android.graphics.Color.BLACK);
             fpsView.setPadding(16, 8, 16, 8);
             fpsView.setText("-- FPS");
@@ -136,7 +136,7 @@ public class MainActivity extends SDLActivity {
                 public void run() {
                     try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(fpsFile))) {
                         String line = r.readLine();
-                        if (line != null) fpsView.setText(line.trim() + " FPS");
+                        if (line != null) fpsView.setText(line.trim().replace("|", "\n"));
                     } catch (Exception ignored) {
                     }
                     fpsHandler.postDelayed(this, 500);
